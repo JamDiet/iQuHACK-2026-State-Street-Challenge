@@ -1,0 +1,136 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath, amssymb, amsthm}
+\usepackage{geometry}
+\geometry{margin=1in}
+
+\title{Monte Carlo Error Scaling for Value-at-Risk Estimation}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{Problem Setting}
+
+Let $L$ be a real-valued random variable representing portfolio loss over a fixed time horizon (e.g.\ one day), with cumulative distribution function (CDF) $F_L$ and probability density function (PDF) $f_L$.
+
+For a confidence level $\alpha \in (0,1)$, the Value-at-Risk (VaR) is defined as the $\alpha$-quantile of the loss distribution:
+\[
+\mathrm{VaR}_\alpha = q_\alpha := \inf \{ x \in \mathbb{R} \mid F_L(x) \ge \alpha \}.
+\]
+
+In Monte Carlo estimation, we generate $N$ independent samples
+\[
+L_1, L_2, \dots, L_N \sim L
+\]
+and estimate $\mathrm{VaR}_\alpha$ using the empirical quantile $\hat q_\alpha$.
+
+The central question is:
+
+\begin{quote}
+Why does reducing the Monte Carlo estimation error by a factor of 2 require approximately 4 times as many samples?
+\end{quote}
+
+\section{Monte Carlo Error for Sample Means}
+
+We begin with the classical case of estimating an expectation. Let $Y$ be a random variable with
+\[
+\mathbb{E}[Y] = \mu, \quad \mathrm{Var}(Y) = \sigma^2.
+\]
+
+The Monte Carlo estimator of $\mu$ using $N$ samples is
+\[
+\bar Y_N = \frac{1}{N} \sum_{i=1}^N Y_i.
+\]
+
+Because the samples are independent,
+\[
+\mathrm{Var}(\bar Y_N)
+= \mathrm{Var}\!\left( \frac{1}{N} \sum_{i=1}^N Y_i \right)
+= \frac{1}{N^2} \sum_{i=1}^N \mathrm{Var}(Y_i)
+= \frac{\sigma^2}{N}.
+\]
+
+Therefore, the standard deviation (typical error magnitude) is
+\[
+\mathrm{SD}(\bar Y_N) = \frac{\sigma}{\sqrt{N}}.
+\]
+
+This $\mathcal{O}(N^{-1/2})$ scaling is fundamental and arises from the additive nature of variance.
+
+\section{Sample Complexity Consequence}
+
+Suppose we desire a Monte Carlo error no larger than $\varepsilon$. Since
+\[
+\mathrm{SD}(\bar Y_N) \approx \frac{C}{\sqrt{N}},
+\]
+achieving $\mathrm{SD}(\bar Y_N) \le \varepsilon$ requires
+\[
+N \ge \left( \frac{C}{\varepsilon} \right)^2.
+\]
+
+Thus, halving the error tolerance ($\varepsilon \mapsto \varepsilon/2$) requires quadrupling the number of samples:
+\[
+N_{\text{new}} = 4 N_{\text{old}}.
+\]
+
+\section{Monte Carlo Estimation of Quantiles}
+
+VaR estimation differs from expectation estimation because it involves a quantile rather than a mean. Nevertheless, sample quantiles exhibit similar asymptotic behavior.
+
+Let $\hat q_\alpha$ be the empirical $\alpha$-quantile of the Monte Carlo samples. Under mild regularity conditions (specifically, $f_L(q_\alpha) > 0$), the asymptotic distribution of $\hat q_\alpha$ is
+\[
+\sqrt{N}(\hat q_\alpha - q_\alpha)
+\;\xrightarrow{d}\;
+\mathcal{N}\!\left(0, \frac{\alpha(1-\alpha)}{f_L(q_\alpha)^2} \right).
+\]
+
+Equivalently,
+\[
+\mathrm{Var}(\hat q_\alpha)
+\approx \frac{\alpha(1-\alpha)}{N\, f_L(q_\alpha)^2}.
+\]
+
+Taking the square root yields the standard error:
+\[
+\mathrm{SD}(\hat q_\alpha)
+\approx \frac{\sqrt{\alpha(1-\alpha)}}{f_L(q_\alpha)} \cdot \frac{1}{\sqrt{N}}.
+\]
+
+\section{Interpretation}
+
+The $1/\sqrt{N}$ scaling persists for VaR because:
+\begin{itemize}
+\item The number of samples falling below the true VaR behaves like a binomial random variable with variance proportional to $N$.
+\item Translating uncertainty in sample counts into uncertainty in the quantile value requires dividing by the local density $f_L(q_\alpha)$.
+\item The resulting estimator variance is therefore proportional to $1/N$.
+\end{itemize}
+
+As with expectations, reducing VaR estimation error by a factor of 2 requires increasing the number of Monte Carlo samples by a factor of 4.
+
+\section{Practical Implications for VaR}
+
+While the convergence rate is universal, the constant factor
+\[
+\frac{1}{f_L(q_\alpha)}
+\]
+can be large for:
+\begin{itemize}
+\item high confidence levels (e.g.\ $\alpha = 0.99$ or $0.999$),
+\item heavy-tailed loss distributions,
+\item flat densities near the quantile.
+\end{itemize}
+
+As a result, VaR estimation can require very large sample sizes even though the asymptotic scaling remains $\mathcal{O}(N^{-1/2})$.
+
+\section{Summary}
+
+\begin{itemize}
+\item Monte Carlo estimators typically exhibit error proportional to $1/\sqrt{N}$.
+\item This scaling arises from variance additivity and averaging.
+\item Sample quantiles, including VaR estimators, obey the same asymptotic law.
+\item Consequently, reducing error by a factor of $k$ requires $k^2$ times as many samples.
+\end{itemize}
+
+\end{document}
