@@ -9,6 +9,7 @@
 \usepackage{booktabs}
 \usepackage{float}
 \usepackage{titlesec}
+\usepackage{subcaption} % For sub-figures
 
 % Page Geometry setup
 \geometry{
@@ -35,92 +36,110 @@
 
 \maketitle
 
-\section{Problem Description \& Probability Model}
+\section{Introduction \& Problem Scope}
 Value at Risk (VaR) is the standard metric for quantifying financial risk, answering the fundamental question: \textit{"What is the maximum amount I could lose with $\alpha$\% confidence?"}
 
-For this challenge, we modeled an asset return probability distribution over a fixed time horizon using a \textbf{Gaussian distribution} with the following parameters:
-\begin{itemize}
-    \item Mean return ($\mu$): 15\%
-    \item Standard deviation ($\sigma$): 20\%
-\end{itemize}
+For this challenge, we modeled an asset return probability distribution over a fixed time horizon using a \textbf{Gaussian distribution} with mean $\mu=15\%$ and standard deviation $\sigma=20\%$. Our goal was to estimate the VaR at high confidence levels (95\% and 99\%) and rigorously compare the computational resources required to achieve a target estimation error ($\epsilon$).
 
-Our goal was to estimate the VaR at high confidence levels (95\% and 99\%) and rigorously compare the computational resources required to achieve a target estimation error ($\epsilon$) using classical versus quantum methods.
+\paragraph{Challenge Statement:}
+\textit{This challenge is not about demonstrating runtime superiority of quantum algorithms in practice. Rather, it is about understanding:
+\begin{itemize}
+    \item How quantum amplitude estimation reduces sampling complexity,
+    \item When this reduction is meaningful, and
+    \item What tradeoffs arise in implementing quantum risk estimation procedures.
+\end{itemize}}
 
 \section{Classical Benchmark: Monte Carlo Simulation}
-As a baseline, we implemented a classical Monte Carlo simulation to establish a performance floor. The workflow involved:
-\begin{enumerate}
-    \item Sampling $N$ independent returns from the defined Gaussian distribution.
-    \item Sorting the samples to form an empirical Cumulative Distribution Function (CDF).
-    \item Extracting the $(1-\alpha)$-quantile as the VaR estimate.
-\end{enumerate}
+As a baseline, we implemented a classical Monte Carlo simulation. The workflow involved sampling $N$ independent returns, sorting the empirical Cumulative Distribution Function (CDF), and extracting the $(1-\alpha)$-quantile.
 
-\paragraph{Results:}
-As expected, the classical error scaled according to the Central Limit Theorem:
+\paragraph{Experimental Convergence:}
+Figure \ref{fig:classical_convergence} (Left) illustrates the convergence of the VaR estimate towards the theoretical value of approximately $\mathbf{0.179}$. While the mean estimate stabilizes, the standard deviation (error bars) remains significant even at $N=10^4$.
+
+\paragraph{Error Scaling:}
+Our RMSE analysis (Figure \ref{fig:classical_convergence}, Right) confirms the theoretical prediction of the Central Limit Theorem. The Classical RMSE tracks the reference $N^{-1/2}$ line almost perfectly.
 \begin{equation}
     \epsilon \propto \frac{1}{\sqrt{N}}
 \end{equation}
-This scaling confirms that to improve precision by a factor of 10, the classical approach requires 100 times more samples—a prohibitive computational cost for high-frequency, high-precision risk calculations in a live trading environment.
+To improve precision by one order of magnitude (e.g., reducing error from $10^{-2}$ to $10^{-3}$), the classical approach required increasing the sample count by a factor of 100. This computational wall makes real-time high-precision risk calculations prohibitive on classical hardware.
+
+\begin{figure}[H]
+    \centering
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{mc_convergence_errorbars.png}
+        \caption{VaR Estimates converging to theoretical dashed line (0.179).}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.48\textwidth}
+        \includegraphics[width=\textwidth]{mc_convergence.png}
+        \caption{RMSE scaling showing $\mathcal{O}(N^{-1/2})$ behavior.}
+    \end{subfigure}
+    \caption{Classical Monte Carlo performance analysis.}
+    \label{fig:classical_convergence}
+\end{figure}
 
 \section{Quantum Workflow: IQAE \& Bisection Search}
-Leveraging the \textbf{Classiq SDK}, we developed a quantum algorithm to estimate VaR without relying on massive sampling.
+We employed **Iterative Quantum Amplitude Estimation (IQAE)** combined with a classical **Bisection Search**. The algorithm encodes the Gaussian distribution into state amplitudes and uses a comparator oracle to estimate cumulative probabilities, iteratively narrowing the search window for the VaR threshold.
 
-\subsection{Circuit Architecture}
-\begin{itemize}
-    \item \textbf{State Preparation:} We encoded the Gaussian probability distribution directly into the amplitudes of a quantum state using Classiq’s logic synthesis engine.
-    \item \textbf{Threshold Oracle:} We constructed a comparator oracle that flips a target qubit if the encoded value is below a specific threshold (representing a tail event).
-    \item \textbf{Estimation Routine:} Instead of simple sampling, we employed \textbf{Iterative Quantum Amplitude Estimation (IQAE)}. Unlike standard QAE, IQAE does not require Quantum Phase Estimation (QPE), allowing for reduced circuit depth while maintaining the Heisenberg scaling advantage.
-\end{itemize}
-
-\subsection{The Search Algorithm}
-To find the specific VaR threshold, we wrapped the IQAE routine in a classical \textbf{Bisection Search}. The algorithm iteratively guesses a threshold $K$, estimates the cumulative probability $P(X \le K)$ using IQAE, and adjusts the search window until the probability converges to $1-\alpha$.
-
-\section{Comparison \& Sensitivity Analysis}
+\section{Detailed Sensitivity Analysis}
 
 \subsection{Accuracy vs. Queries (The Quantum Advantage)}
-We performed a rigorous head-to-head comparison of convergence rates.
+We performed a rigorous head-to-head comparison of convergence rates (Figure \ref{fig:comparison_plots}).
 \begin{itemize}
-    \item \textbf{Classical:} Exhibited the standard $\mathcal{O}(1/\epsilon^2)$ convergence.
-    \item \textbf{Quantum:} Our IQAE implementation demonstrated a convergence scaling of approximately $\mathcal{O}(1/\epsilon)$.
+    \item \textbf{Slope Analysis:} On the log-log plot, the Classical Monte Carlo (dashed orange) exhibits a slope of $\approx -0.5$. In contrast, the Quantum IQAE (solid blue/green) exhibits a slope of $\approx -1.0$.
+    \item \textbf{Crossover Point:} At low sample counts ($<10^2$), classical methods are competitive due to lower overhead. However, beyond $10^2$ samples, the quantum advantage becomes distinct.
+    \item \textbf{Quantitative Gap:} At $10^4$ samples/iterations, the Quantum Error ($\approx 2 \times 10^{-4}$) is an order of magnitude lower than the Classical Error ($\approx 2 \times 10^{-3}$).
 \end{itemize}
 
 \begin{figure}[H]
     \centering
-    % Ensure the filename matches exactly what is in your folder
-    \includegraphics[width=0.85\textwidth]{Graphs/estimation_error_IQAEvsmc.png}
-    \caption{Log-log plot showing the estimation error $\epsilon$ decreasing significantly faster for the Quantum (IQAE) method compared to Classical Monte Carlo as the number of oracle calls increases.}
-    \label{fig:error_scaling}
+    \includegraphics[width=0.85\textwidth]{estimation_error_IQAEvsmc.png}
+    \caption{Log-log plot showing the estimation error $\epsilon$ decreasing significantly faster for the Quantum (IQAE) method ($\propto 1/N$) compared to Classical Monte Carlo ($\propto 1/\sqrt{N}$).}
+    \label{fig:comparison_plots}
 \end{figure}
 
-\subsection{Sensitivity Analysis}
+\subsection{Sensitivity to Confidence Levels ($\alpha$)}
+A critical finding is the sensitivity of classical methods to tail events (visible in the separation of lines in Figure \ref{fig:comparison_plots}).
 \begin{itemize}
-    \item \textbf{Confidence Levels:} At higher confidence levels (e.g., 99\%), classical methods struggled to capture rare tail events without increasing $N$ drastically. The quantum method, leveraging amplitude amplification, identified these tail probabilities more efficiently.
-    \item \textbf{Discretization (Qubit Count):} We analyzed the impact of grid resolution on accuracy. Using fewer qubits (e.g., 7) introduced discretization artifacts (step-like CDFs), while higher qubit counts (e.g., 15) smoothed the distribution, reducing modeling error at the cost of circuit depth.
+    \item \textbf{Classical Degradation:} The error for Classical MC at 99\% confidence (Orange line) is consistently higher than at 95\% confidence (Blue line). To resolve rare tail events, classical MC requires significantly more samples to "find" the tail.
+    \item \textbf{Quantum Robustness:} The Quantum QAE method (Green line) maintains its steep convergence slope regardless of the specific probability amplitude being estimated. This makes quantum methods uniquely suited for "Black Swan" event analysis.
 \end{itemize}
+
+\subsection{Discretization \& Precision}
+We analyzed the impact of the qubit register size ($n$) on the modeling error.
+\begin{itemize}
+    \item \textbf{Discretization Artifacts:} Using fewer qubits (e.g., $n=7$) results in a "blocky" CDF. The algorithm may converge efficiently, but it converges to a discretized bin rather than the true continuous VaR.
+    \item \textbf{Resolution Threshold:} We found that $n \ge 15$ qubits are required to smooth the distribution sufficiently such that modeling error drops below the target algorithmic error ($\epsilon$).
+\end{itemize}
+
+\subsection{Error Sensitivity}
+Finally, we analyzed the quantum estimation error sensitivity to target precision $\epsilon$ (Figure \ref{fig:sensitivity}). The log-log linear relationship holds across all precision targets ($\epsilon=0.05$ to $0.005$). The parallel lines indicate that while higher precision adds a constant overhead, it does not alter the fundamental Heisenberg scaling advantage.
 
 \begin{figure}[H]
     \centering
-    \includegraphics[width=0.85\textwidth]{Extension-New-Algo/15_qubit_analysis.png}
-    \caption{Analysis of distribution smoothness and tail event capture using 15 qubits.}
-    \label{fig:15_qubit}
+    \includegraphics[width=0.75\textwidth]{quantum_advantage.png}
+    \caption{Quantum Estimation Error Sensitivity: The scaling law remains consistent across varying confidence levels ($\alpha$) and target precisions ($\epsilon$).}
+    \label{fig:sensitivity}
 \end{figure}
 
-\section{Novel Extension: The ``Soft-CVaR'' Architecture}
-Beyond the standard comparison, we developed a novel variational approach for \textbf{Conditional Value at Risk (CVaR)} to address the ``discontinuity bottleneck'' in standard quantum algorithms.
+\section{Discussion: When is Quantum Advantage Real?}
 
-By applying \textbf{Fenchel-Moreau analytic smoothing}, we replaced the sharp indicator functions typically used in risk analysis with smooth approximations. This allows us to use \textbf{Variational Quantum Signal Processing (V-QSP)} to approximate the risk function.
-
+\subsection{The "Advantage Zone"}
+Quantum methods are not universally superior. They appear advantageous specifically in the **High-Precision, High-Confidence** regime:
 \begin{itemize}
-    \item \textbf{Key Innovation:} This method reduces the polynomial approximation degree required from $\mathcal{O}(1/\epsilon)$ to $\mathcal{O}(\log(1/\epsilon))$.
-    \item \textbf{Impact:} This theoretically allows for risk estimation with exponentially shallower circuits compared to arithmetic-heavy approaches, effectively bypassing the Gibbs phenomenon.
+    \item If a rough estimate ($\epsilon \approx 10^{-2}$) is sufficient, classical Monte Carlo is faster and simpler to implement.
+    \item If regulatory standards require high precision ($\epsilon < 10^{-4}$) for capital requirements, the quadratic speedup of QAE reduces query complexity from $10^8$ to $10^4$. This is the zone where quantum becomes enabling.
 \end{itemize}
 
-\section{Discussion \& Conclusion}
-Our analysis demonstrates a clear separation between classical and quantum risk estimation regimes.
+\subsection{Assumptions \& Artifacts}
+\begin{itemize}
+    \item \textbf{State Preparation Assumption:} The observed advantage assumes we can load the Gaussian distribution into the quantum state efficiently (polylogarithmic depth). If state preparation requires $\mathcal{O}(2^n)$ gates, the advantage is negated.
+    \item \textbf{Simulator Artifacts vs. Reality:} The perfect straight lines in our log-log plots are artifacts of a noise-free simulator. On real hardware, gate noise and decoherence would introduce an error floor, limiting the maximum useful circuit depth. This motivates our "Soft-CVaR" extension (Section 6), which aims to reduce circuit depth requirements.
+\end{itemize}
 
-\begin{enumerate}
-    \item \textbf{Advantage:} The quantum quadratic speedup ($\mathcal{O}(1/\epsilon)$) is validated in the Classiq simulator. This advantage is most pronounced in high-precision regimes where classical Monte Carlo hits a ``computational wall.''
-    \item \textbf{Assumptions:} The advantage assumes efficient state preparation. The ``Soft-CVaR'' extension further suggests that by changing the mathematical definition of the risk function to be smooth, we can extract quantum advantage even earlier in the fault-tolerant era.
-    \item \textbf{Final Verdict:} While classical Monte Carlo remains efficient for rough estimates, IQAE combined with Bisection Search offers a superior scaling pathway for the high-precision demands of regulatory capital calculation.
-\end{enumerate}
+\section{Novel Extension: Soft-CVaR}
+Beyond the standard comparison, we developed a novel variational approach for \textbf{Conditional Value at Risk (CVaR)} to address the ``discontinuity bottleneck.'' By applying \textbf{Fenchel-Moreau analytic smoothing}, we replaced sharp indicator functions with smooth approximations, enabling **Variational Quantum Signal Processing (V-QSP)**. This theoretically reduces approximation degree from $\mathcal{O}(1/\epsilon)$ to $\mathcal{O}(\log(1/\epsilon))$.
+
+\section{Conclusion}
+Our analysis demonstrates a clear separation between classical and quantum risk estimation regimes. While classical Monte Carlo remains efficient for rough estimates, IQAE combined with Bisection Search offers a superior scaling pathway for the high-precision demands of regulatory capital calculation.
 
 \end{document}
